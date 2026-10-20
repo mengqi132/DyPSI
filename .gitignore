@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (raw data must be obtained from the original sources)
+data/
+!data/.gitkeep
+
+# Experiment outputs
+checkpoints/
+results/
+exps/
+runs/
+logs/
+wandb/
+
+# Model weights and tensor/array artifacts
+*.pth
+*.pt
+*.ckpt
+*.npy
+*.npz
+*.mat
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

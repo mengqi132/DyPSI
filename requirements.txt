@@ -1,0 +1,8 @@
+torch>=2.0            # deep learning backend (CUDA build recommended)
+numpy>=1.24           # numerical arrays
+scipy>=1.10           # Gaussian kernels, linear algebra, .mat I/O
+matplotlib>=3.7       # visualization of fields and trajectories
+pyyaml>=6.0           # YAML config loading
+tqdm>=4.65            # progress bars
+opencv-python>=4.8    # image/video I/O and field preprocessing
+netCDF4>=1.6          # optional, for GLORYS12 sea-temperature data

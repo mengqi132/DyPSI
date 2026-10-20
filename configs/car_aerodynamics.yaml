@@ -1,0 +1,113 @@
+# DyPSI (NeurIPS 2026) -- dataset configuration: car_aerodynamics
+# All paths are relative placeholders; override via CLI flags.
+
+dataset:
+  name: car_aerodynamics
+  # Surface pressure on a 3D car mesh (unstructured grid).
+  raw_path: data/car_aerodynamics/car_pressure.vtk
+  # 3D rasterized grid of the surface-mesh embedding (signed-distance
+  # projection of the mesh vertices), e.g. the vertex bounding-box grid
+  # used for the SPFs in data generation.
+  grid_shape: null               # e.g. [D1, D2, D3]
+  n_channels: 1                  # surface pressure
+  spatial_dims: 3
+  field_description: "pressure"
+  mesh:
+    path: data/car_aerodynamics/car_mesh.vtk
+    n_vertices: 95428
+    surface_only: true           # sensors live on the car surface vertices
+  sensor_budgets: [15, 30, 50, 100, 200]   # sensor counts evaluated at test time
+
+trajectory_optimization:
+  # Teacher-guided differentiable sensor-trajectory optimization.
+  teacher: physense              # external reconstructor (PhySense)
+  n_sensors: 50                  # default; override with --num_sensors
+  n_frames: 16                   # frames per optimized segment (= joint.seg_len)
+  lambda_gp: 1.0e-4              # GP temporal-prior weight
+  gamma_dyn: 0.1                 # dynamics penalty weight
+  v_max: 2.0                     # max sensor speed (mesh units / frame)
+  a_max: 0.5                     # max sensor acceleration (mesh units / frame^2)
+  gp_length_scale: 4.0           # Matern-3/2 length scale, in frames
+  gp_sigma: 1.0                  # GP signal standard deviation
+  n_iterations: 500
+  lr: 0.01
+  n_recon_samples: 4
+  euler_steps: 10
+  use_gradient_checkpointing: false
+  init: random                   # initial positions are snapped to surface vertices
+  domain_constraint: mesh_surface  # sensors are constrained to surface vertices
+
+ftm:
+  # Shared-basis Functional Tucker factorization.
+  # 4 modes: (R1, R2, R3, R4) = (channel rank, 3 spatial ranks).
+  phy:
+    ranks: [24, 24, 24, 16]
+    omega: 20
+    lr: 1.0e-3
+    weight_decay: 1.0e-5
+    tv_weight: 1.0e-6
+    max_iters: 20000
+    eval_interval: 1000
+    grad_clip: 1.0
+  sen:
+    ranks: [8, 24, 24, 16]
+    omega: 30
+    lr: 1.0e-3
+    weight_decay: 1.0e-5
+    tv_weight: 1.0e-6
+    max_iters: 20000
+    eval_interval: 1000
+    grad_clip: 1.0
+
+joint:
+  # Joint latent: concatenated phy/sen FTM cores.
+  seg_len: 16                    # T_seg
+  k_obs: 4                       # observed prefix frames K_obs
+  stride: 5
+  spf_bandwidth: [2.0, 2.0, 2.0] # SPF kernel bandwidth, mesh units per axis
+
+diffusion:
+  # EDM-style joint diffusion prior.
+  unet:
+    model_channels: 128
+    channel_mult: [1, 2, 4, 4]
+    num_blocks: 3
+    num_temporal_latent: 16
+    attn_resolutions: [12, 6]
+    dropout: 0.1
+    # 4-mode cores (R1, R2, R3, R4) enter the 2D U-Net by folding R4 into the
+    # channel axis: in_channels = (24+8)*16 = 512 (set by the scripts);
+    # img_resolution is R2 = 24 (square 24x24 grid: 24->12->6->3).
+    fold_spatial_modes: true
+  edm:
+    sigma_min: 0.002
+    sigma_max: 80.0
+    rho: 7.0
+    sigma_data: 0.5
+    P_mean: -1.2                 # ln sigma ~ N(P_mean, P_std^2)
+    P_std: 1.2
+  training:
+    optimizer: adam
+    batch_size: 16
+    num_steps: 200000
+    lr: 2.0e-4
+    betas: [0.9, 0.999]
+    warmup: 1000
+    accumulation_steps: 1
+    bf16: true
+  gp:
+    kernel: matern32
+    length_scale: 4.0
+    signal_var: 1.0
+  history:
+    # History-embedding conditioning; disabled by default.
+    enabled: false
+    hidden_dim: 256
+
+sampling:
+  num_steps: 50                  # Heun sampler steps
+  anchor: linear                 # prefix anchoring scheme
+  heun: true
+  zeta: 1.0                      # anchoring strength (anchor=harmonic ablation)
+  use_nms: true                  # NMS filter before SPF top-k readout
+  nms_size: 3
